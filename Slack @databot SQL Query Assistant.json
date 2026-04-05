@@ -1,0 +1,526 @@
+{
+  "name": "Slack @databot SQL Query Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "trigger": [
+          "app_mention"
+        ],
+        "watchWorkspace": true,
+        "options": {
+          "resolveIds": true
+        }
+      },
+      "id": "d149e690-27a1-4294-a374-dfcad4bae88a",
+      "name": "When @databot Mentioned",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        448
+      ],
+      "webhookId": "f8172c40-0097-4d6c-9afe-76cf6d0cf1a0",
+      "credentials": {
+        "slackApi": {
+          "id": "5yZKaCcPJ7CLM593",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "question",
+              "name": "question",
+              "value": "={{ $json.text.replace(/<@[^>]+>\\s*/, \"\") }}",
+              "type": "string"
+            },
+            {
+              "id": "channel",
+              "name": "channel",
+              "value": "={{ $json.channel }}",
+              "type": "string"
+            },
+            {
+              "id": "thread_ts",
+              "name": "thread_ts",
+              "value": "={{ $json.ts }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "16c53ff1-29fb-40a9-88d3-e29a49bfa618",
+      "name": "Extract Question",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -976,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert SQL analyst. Your only job is to convert natural language questions into safe PostgreSQL SELECT queries.\n\nRULES:\n- Output ONLY the raw SQL query. No explanation, no markdown, no backticks.\n- Only use SELECT statements. Never use DROP, DELETE, UPDATE, INSERT, ALTER, TRUNCATE.\n- Always add LIMIT 500 to prevent large result sets.\n- Use only the tables and columns defined in the schema below.\n\nDATABASE SCHEMA:\n[PASTE YOUR SCHEMA HERE - example below]\n\nTable: orders\n  - order_id (INT, primary key)\n  - customer_id (INT)\n  - order_date (DATE)\n  - total_amount (DECIMAL)\n  - status (VARCHAR) -- values: pending, shipped, delivered, cancelled\n\nTable: customers\n  - customer_id (INT, primary key)\n  - name (VARCHAR)\n  - email (VARCHAR)\n  - region (VARCHAR)\n  - created_at (DATE)\n\nTable: products\n  - product_id (INT, primary key)\n  - name (VARCHAR)\n  - category (VARCHAR)\n  - price (DECIMAL)"
+            },
+            {
+              "content": "={{ $json.event.text }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 1000,
+          "temperature": 0
+        }
+      },
+      "id": "7b66f8e2-5f66-4128-8122-25ffe8ac1ada",
+      "name": "Generate SQL Query",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        -752,
+        448
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "NJ7IRNynzhCIxVsS",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "sql_query",
+              "name": "sql_query",
+              "value": "={{ $json.message.content.trim() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a89b78df-9606-4bbf-93fe-871add567a13",
+      "name": "Extract SQL Query",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -400,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sqlQuery = $input.first().json.sql_query.toUpperCase();\n\n// List of destructive SQL keywords to block\nconst destructiveKeywords = [\n  'DROP', 'DELETE', 'TRUNCATE', 'INSERT', 'UPDATE',\n  'ALTER', 'CREATE', 'REPLACE', 'GRANT', 'REVOKE'\n];\n\n// Check if query contains any destructive keywords\nconst isDestructive = destructiveKeywords.some(keyword => \n  sqlQuery.includes(keyword)\n);\n\n// Ensure query starts with SELECT\nif (!sqlQuery.trim().startsWith('SELECT')) {\n  return [{ json: { ...($input.first().json), is_safe: false, error: 'Only SELECT queries are allowed.' } }];\n}\n\nif (isDestructive) {\n  return [{ json: { ...($input.first().json), is_safe: false, error: 'SQL query contains destructive operations. Only SELECT queries are allowed.' } }];\n}\n\nreturn [{ json: { ...($input.first().json), is_safe: true } }];"
+      },
+      "id": "e06e0a5a-502e-4864-bf55-b1ec18d6b1e3",
+      "name": "Validate SQL (Block Destructive)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.sql_query }}",
+        "options": {}
+      },
+      "id": "8a25da53-bf97-44a5-afca-5c6230453f21",
+      "name": "Execute Query on Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        272,
+        544
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "BMUHE92N10xeruYD",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.all().map(item => item.json);\n\nif (results.length === 0) {\n  return [{ json: { formattedTable: 'No results found.', rowCount: 0 } }];\n}\n\n// Get column names from first result\nconst columns = Object.keys(results[0]);\n\n// Create header row\nlet table = columns.join(' | ') + '\\n';\ntable += columns.map(() => '---').join(' | ') + '\\n';\n\n// Add data rows\nresults.forEach(row => {\n  table += columns.map(col => row[col] ?? 'NULL').join(' | ') + '\\n';\n});\n\nreturn [{ json: { formattedTable: table, rawResults: results, rowCount: results.length } }];"
+      },
+      "id": "a2b47656-f6b7-43f8-a1cd-954ab7a0bed2",
+      "name": "Format Results as Table",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a helpful data analyst. Given a user question and SQL query results, provide a clear, concise plain English summary of the findings. Be conversational and friendly."
+            },
+            {
+              "content": "={{ \"Question: \" + $(\"Extract Question\").item.json.question + \"\\n\\nResults:\\n\" + $json.formattedTable }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 300,
+          "temperature": 0.7
+        }
+      },
+      "id": "c21aa227-bcda-4c0a-a2c8-2e5ce4d621a8",
+      "name": "Generate Plain English Summary",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        544
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "NJ7IRNynzhCIxVsS",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Extract Question\").item.json.channel }}"
+        },
+        "text": "={{ $json.message.content + \"\\n\\n```\\n\" + $(\"Format Results as Table\").item.json.formattedTable + \"```\" }}",
+        "otherOptions": {
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $(\"Extract Question\").item.json.thread_ts }}"
+            }
+          }
+        }
+      },
+      "id": "7c4b6f4b-57fc-4313-9eac-e05993082c45",
+      "name": "Send Summary to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        1072,
+        544
+      ],
+      "webhookId": "07f9fbb8-c7d6-4e54-b472-37643e059739",
+      "credentials": {
+        "slackApi": {
+          "id": "5yZKaCcPJ7CLM593",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_safe }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a146347f-26aa-46e6-be9c-d73d9bfe2b96",
+      "name": "Check SQL Safety",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        48,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "question",
+              "name": "question",
+              "value": "={{ $(\"Extract Question\").item.json.question }}",
+              "type": "string"
+            },
+            {
+              "id": "sql_query",
+              "name": "sql_query",
+              "value": "={{ $(\"Extract SQL Query\").item.json.sql_query }}",
+              "type": "string"
+            },
+            {
+              "id": "row_count",
+              "name": "row_count",
+              "value": "={{ $(\"Format Results as Table\").item.json.rowCount }}",
+              "type": "number"
+            },
+            {
+              "id": "is_safe",
+              "name": "is_safe",
+              "value": "={{ $(\"Validate SQL (Block Destructive)\").item.json.is_safe }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2b8d33f-498d-4eac-875e-44415557f409",
+      "name": "Prepare Audit Log",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1296,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1sal1v0oyxzjaYixYlQLDDdwFSARVGDyHYKy9S8w0E4g/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "d2a98a01-6266-40d5-8c94-82df78108eba",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1520,
+        544
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0l3rxiuLs7SSr7pn",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.channel }}"
+        },
+        "text": "={{ \"⚠️ Unsafe SQL Query Detected\\n\\n\" + $json.error + \"\\n\\nYour question: \" + $json.question }}",
+        "otherOptions": {
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $json.thread_ts }}"
+            }
+          }
+        }
+      },
+      "id": "def21932-65c6-4b4d-b145-0d787b3d4a85",
+      "name": "Send Error to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        272,
+        352
+      ],
+      "webhookId": "682e7678-32b1-47ce-80c1-63a35c44ca08",
+      "credentials": {
+        "slackApi": {
+          "id": "5yZKaCcPJ7CLM593",
+          "name": "Slack account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When @databot Mentioned": {
+      "main": [
+        [
+          {
+            "node": "Extract Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Question": {
+      "main": [
+        [
+          {
+            "node": "Generate SQL Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate SQL Query": {
+      "main": [
+        [
+          {
+            "node": "Extract SQL Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract SQL Query": {
+      "main": [
+        [
+          {
+            "node": "Validate SQL (Block Destructive)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate SQL (Block Destructive)": {
+      "main": [
+        [
+          {
+            "node": "Check SQL Safety",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Query on Postgres": {
+      "main": [
+        [
+          {
+            "node": "Format Results as Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Results as Table": {
+      "main": [
+        [
+          {
+            "node": "Generate Plain English Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Plain English Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Summary to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check SQL Safety": {
+      "main": [
+        [
+          {
+            "node": "Execute Query on Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Summary to Slack": {
+      "main": [
+        [
+          {
+            "node": "Prepare Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Audit Log": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "e4fd71ca-a63a-4a23-8dd9-2aed8eafb6e5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "975122d50e41a4e52f51064dace571b7ac489a163e6578746e3854456d9c74c9"
+  },
+  "id": "MfzFjWgrP50vDOrf",
+  "tags": []
+}
