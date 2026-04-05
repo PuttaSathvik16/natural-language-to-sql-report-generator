@@ -6,7 +6,8 @@ Built with **n8n** · **OpenAI GPT-4o** · **Supabase (PostgreSQL)** · **Slack*
 
 ---
 ## Workflow Sample
-<img width="1800" height="861" alt="Screenshot 2026-04-04 at 11 38 58 PM" src="https://github.com/user-attachments/assets/e2f2c30f-2819-49d8-b0ea-a3b93bd4c947" />
+<img width="1800" height="866" alt="Screenshot 2026-04-05 at 12 21 47 AM" src="https://github.com/user-attachments/assets/f83e98bb-9682-4589-b64e-aa79c38c0521" />
+
 
 ## What it does
 
