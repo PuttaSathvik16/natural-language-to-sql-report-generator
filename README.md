@@ -243,7 +243,3 @@ nl-to-sql-slack-bot/
 Built as part of a series of high-impact n8n automation workflows for data analysts.
 
 ---
-
-## License
-
-MIT
